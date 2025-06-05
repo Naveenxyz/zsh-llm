@@ -149,6 +149,13 @@ extract_gemini_response() {
 }
 
 main() {
+    # Parse arguments
+    local mode="shell"  # default mode
+    if [[ "$1" == "--mode" ]]; then
+        mode="$2"
+        shift 2
+    fi
+
     # Check if curl is available
     if ! command -v curl &> /dev/null; then
         echo "echo \"$MISSING_PREREQUISITES Install curl first\""
@@ -192,8 +199,20 @@ main() {
     local buffer
     buffer=$(cat)
 
-    # Set system message for generation mode
-    local system_message="You are a zsh shell expert, please write a ZSH command that solves my problem. You should only output the completed command, no need to include any other explanation."
+    # Set system message based on mode
+    local system_message
+    case "$mode" in
+        "shell")
+            system_message="You are a zsh shell expert, please write a ZSH command that solves my problem. You should only output the completed command, no need to include any other explanation."
+            ;;
+        "chat")
+            system_message="You are a helpful AI assistant. Please provide clear, accurate, and helpful responses to user questions."
+            ;;
+        *)
+            echo "ERROR: Unknown mode '$mode'. Supported modes: shell, chat"
+            return 1
+            ;;
+    esac
 
     # Make API call based on provider
     local response
@@ -216,8 +235,10 @@ main() {
         return 1
     fi
 
-    # Remove code block formatting if present
-    result=$(echo "$result" | sed 's/```zsh//g' | sed 's/```bash//g' | sed 's/```//g' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    # Remove code block formatting if present (only for shell mode)
+    if [[ "$mode" == "shell" ]]; then
+        result=$(echo "$result" | sed 's/```zsh//g' | sed 's/```bash//g' | sed 's/```//g' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    fi
     echo "$result"
 }
 

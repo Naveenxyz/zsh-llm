@@ -70,3 +70,38 @@ zsh_llm_suggestions() {
 }
 
 zle -N zsh_llm_suggestions
+
+zllm() {
+  local query="$*"
+  local stdin_input=""
+  
+  # Check if there's input from stdin (pipe)
+  if [ ! -t 0 ]; then
+    stdin_input=$(cat)
+    # If we have stdin input and a query, combine them
+    if [[ -n "$query" ]]; then
+      query="$stdin_input $query"
+    else
+      query="$stdin_input"
+    fi
+  fi
+  
+  # If no query at all, show usage
+  if [[ -z "$query" ]]; then
+    echo "Usage: zllm \"your query here\" or echo \"input\" | zllm \"your query\""
+    return 1
+  fi
+  
+  # Use the existing LLM infrastructure with chat mode
+  local result_file="/tmp/zsh-llm-suggestions-result-direct"
+  local llm="$SCRIPT_DIR/zsh-llm-suggestions.sh --mode chat"
+  
+  # Run the query and wait for it to complete
+  echo -n "$query" | eval $llm > $result_file
+  
+  # Output the result
+  cat $result_file
+  
+  # Clean up
+  rm -f $result_file
+}
