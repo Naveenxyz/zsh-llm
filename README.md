@@ -3,8 +3,7 @@
 A powerful zsh plugin that provides AI-powered command suggestions using various Large Language Models (LLMs). Type your problem in natural language and get instant shell command suggestions!
 
 Preview
-![452089828-bc3d9a1e-8374-4c3a-aa0a-c4fb9340e7d6](https://github.com/user-attachments/assets/38ad4c6e-e6d6-4e21-bcdb-e9e6a12e3014)
-
+![Screen Recording 2025-06-06 at 4 19 58 AM](https://github.com/user-attachments/assets/e1c0b24f-b99f-4889-94a5-2efb96745736)
 ## Features
 
 - 🤖 **AI-Powered Suggestions**: Convert natural language to shell commands
