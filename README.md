@@ -33,7 +33,7 @@ apt-get install jq  # Ubuntu/Debian
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/zsh-llm-suggestions.git ~/.zsh-llm-suggestions
+   git clone https://github.com/Naveenxyz/zsh-llm.git ~/.zsh-llm-suggestions
    ```
 
 2. **Make the script executable:**
