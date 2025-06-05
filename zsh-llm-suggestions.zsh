@@ -119,12 +119,14 @@ zllm_tui() {
   
   # Clean exit handling
   cleanup() {
+    tput rmcup
     rm -f "$conversation_file" "$query_file" "$result_file"
     stty echo
-    printf "\n"
   }
   trap cleanup EXIT INT TERM
   
+  tput smcup
+
   # Suppress all job control
   {
     set +m
