@@ -86,9 +86,15 @@ zllm() {
     fi
   fi
   
-  # If no query at all, show usage
+  # If no arguments and no stdin, launch TUI mode
+  if [[ -z "$query" ]] && [[ -z "$stdin_input" ]]; then
+    zllm_tui
+    return
+  fi
+  
+  # One-shot query mode
   if [[ -z "$query" ]]; then
-    echo "Usage: zllm \"your query here\" or echo \"input\" | zllm \"your query\""
+    echo "Usage: zllm \"your query here\" or echo \"input\" | zllm \"your query\" or just zllm for interactive mode"
     return 1
   fi
   
@@ -104,4 +110,137 @@ zllm() {
   
   # Clean up
   rm -f $result_file
+}
+
+zllm_tui() {
+  local conversation_file="/tmp/zsh-llm-conversation-$$"
+  local query_file="/tmp/zsh-llm-query-$$"
+  local result_file="/tmp/zsh-llm-result-$$"
+  
+  # Clean exit handling
+  cleanup() {
+    rm -f "$conversation_file" "$query_file" "$result_file"
+    stty echo
+    printf "\n"
+  }
+  trap cleanup EXIT INT TERM
+  
+  # Suppress all job control
+  {
+    set +m
+    setopt NO_NOTIFY 2>/dev/null
+    setopt NO_BG_NICE 2>/dev/null  
+  } 2>/dev/null
+  
+  # Initialize conversation
+  printf "# Chat started at %s\n" "$(date)" > "$conversation_file"
+  
+  # Show interface
+  clear
+  printf "\033[1;36m╭─────────────────────────────────────────────────────────────────────────────╮\033[0m\n"
+  printf "\033[1;36m│\033[0m \033[1;37m🤖 LLM Chat Interface\033[0m                                                    \033[1;36m│\033[0m\n" 
+  printf "\033[1;36m├─────────────────────────────────────────────────────────────────────────────┤\033[0m\n"
+  printf "\033[1;36m│\033[0m \033[0;37mCommands: \033[1;33m/help\033[0;37m, \033[1;33m/clear\033[0;37m, \033[1;33m/history\033[0;37m, \033[1;33m/exit\033[0;37m                                 \033[1;36m│\033[0m\n"
+  printf "\033[1;36m╰─────────────────────────────────────────────────────────────────────────────╯\033[0m\n\n"
+  
+  while true; do
+    printf "\033[1;32m❯\033[0m "
+    read -r input_line
+    
+    [[ -z "$input_line" ]] && continue
+    
+    case "$input_line" in
+      "/exit"|"/quit"|"/q")
+        printf "\033[1;35m👋 Goodbye!\033[0m\n"
+        return 0
+        ;;
+      "/clear")
+        clear
+        printf "\033[1;36m╭─────────────────────────────────────────────────────────────────────────────╮\033[0m\n"
+        printf "\033[1;36m│\033[0m \033[1;37m🤖 LLM Chat Interface\033[0m                                                    \033[1;36m│\033[0m\n"
+        printf "\033[1;36m├─────────────────────────────────────────────────────────────────────────────┤\033[0m\n"
+        printf "\033[1;36m│\033[0m \033[0;37mCommands: \033[1;33m/help\033[0;37m, \033[1;33m/clear\033[0;37m, \033[1;33m/history\033[0;37m, \033[1;33m/exit\033[0;37m                                 \033[1;36m│\033[0m\n"
+        printf "\033[1;36m╰─────────────────────────────────────────────────────────────────────────────╯\033[0m\n\n"
+        printf "# Chat started at %s\n" "$(date)" > "$conversation_file"
+        continue
+        ;;
+      "/history")
+        printf "\n\033[1;34m📜 Conversation History:\033[0m\n"
+        printf "\033[0;34m────────────────────────────────────────────────────────────────────────────\033[0m\n"
+        if [[ -s "$conversation_file" ]]; then
+          while IFS= read -r line; do
+            if [[ "$line" == User:* ]]; then
+              printf "\033[1;32m❯\033[0m %s\n" "${line#User: }"
+            elif [[ "$line" == Assistant:* ]]; then
+              printf "\033[1;36m🤖\033[0m %s\n" "${line#Assistant: }"
+            fi
+          done < "$conversation_file"
+        else
+          printf "\033[0;37m   No conversation yet.\033[0m\n"
+        fi
+        printf "\033[0;34m────────────────────────────────────────────────────────────────────────────\033[0m\n\n"
+        continue
+        ;;
+      "/help")
+        printf "\n\033[1;33m📖 Help:\033[0m\n"
+        printf "\033[0;33m────────────────────────────────────────────────────────────────────────────\033[0m\n"
+        printf "\033[1;37m/help\033[0m     - Show this help\n"
+        printf "\033[1;37m/clear\033[0m    - Clear conversation\n"
+        printf "\033[1;37m/history\033[0m  - Show history\n"
+        printf "\033[1;37m/exit\033[0m     - Exit chat\n"
+        printf "\033[0;33m────────────────────────────────────────────────────────────────────────────\033[0m\n\n"
+        continue
+        ;;
+    esac
+    
+    # Store user input
+    printf "User: %s\n" "$input_line" >> "$conversation_file"
+    
+    # Prepare query with context  
+    {
+      grep -v "^#" "$conversation_file" 2>/dev/null | tail -n 10 | tr '\n' ' '
+    } > "$query_file" 2>/dev/null
+    
+    # Show thinking
+    printf "\033[1;36m🤖\033[0m \033[90mThinking"
+    
+    # Run LLM completely silently
+    {
+      "$SCRIPT_DIR/zsh-llm-suggestions.sh" --mode chat < "$query_file" > "$result_file" 2>&1
+    } &
+    
+    llm_job=$!
+    disown $llm_job 2>/dev/null
+    
+    # Spinner
+    spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    i=0
+    while kill -0 $llm_job 2>/dev/null; do
+      printf "\r\033[1;36m🤖\033[0m \033[90mThinking %c\033[0m" "${spinner:$i%10:1}"
+      sleep 0.1
+      ((i++))
+    done
+    
+    wait $llm_job 2>/dev/null
+    
+    # Show response
+    printf "\r\033[1;36m🤖\033[0m "
+    
+    if [[ -s "$result_file" ]]; then
+      cat "$result_file" | while IFS= read -r line; do
+        [[ "$line" == ERROR:* ]] && printf "\033[1;31m❌ %s\033[0m\n" "$line" && continue
+        [[ -n "$line" ]] && printf "\033[0;37m%s\033[0m\n" "$line"
+      done
+      printf "\n"
+      
+      # Store response
+      printf "Assistant: " >> "$conversation_file"
+      cat "$result_file" >> "$conversation_file"
+      printf "\n" >> "$conversation_file"
+    else
+      printf "\033[1;31m❌ No response\033[0m\n\n"
+    fi
+    
+    rm -f "$result_file"
+  done
 }
