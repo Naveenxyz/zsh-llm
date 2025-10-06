@@ -129,6 +129,57 @@ export LOCAL_API_BASE="http://localhost:11434/v1"  # Ollama default
    find . -type f -size +100M
    ```
 
+### Direct Query Mode
+
+Use `zllm` for one-shot queries without the inline suggestion workflow:
+
+```bash
+# Basic query
+zllm "find all files larger than 100MB"
+
+# Specify a model
+zllm -m gemini-2.5-pro "complex query requiring reasoning"
+zllm --model gpt-4 "explain this error"
+
+# Pipe input
+cat error.log | zllm "what's wrong here?"
+```
+
+### Interactive TUI Mode
+
+Launch an interactive chat interface:
+
+```bash
+# Default TUI mode
+zllm              # No arguments launches TUI
+zchat             # Alias for TUI mode
+
+# TUI with specific model
+zllm -m gemini-2.5-pro
+```
+
+### Model Selection Aliases
+
+Create convenient aliases for different models in your `.zshrc`:
+
+```bash
+# Fast, lightweight model
+alias ai='zllm -m gemini-flash-latest'
+
+# Ultra-fast, minimal model
+alias lai='zllm -m gemini-flash-lite-latest'
+
+# Heavy reasoning model
+alias hai='zllm -m gemini-2.5-pro'
+```
+
+Usage:
+```bash
+ai "quick question"              # Uses flash model
+hai "complex reasoning task"     # Uses pro model
+lai "simple query"               # Uses lite model
+```
+
 ### Advanced Examples
 
 #### File Operations
