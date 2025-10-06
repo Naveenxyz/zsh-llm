@@ -72,9 +72,27 @@ zsh_llm_suggestions() {
 zle -N zsh_llm_suggestions
 
 zllm() {
-  local query="$*"
+  local model=""
+  local query=""
   local stdin_input=""
-  
+
+  # Parse arguments for -m/--model flag
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -m|--model)
+        model="$2"
+        shift 2
+        ;;
+      *)
+        query="$query $1"
+        shift
+        ;;
+    esac
+  done
+
+  # Trim leading/trailing spaces from query
+  query=$(echo "$query" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
   # Check if there's input from stdin (pipe)
   if [ ! -t 0 ]; then
     stdin_input=$(cat)
@@ -85,38 +103,53 @@ zllm() {
       query="$stdin_input"
     fi
   fi
-  
+
   # If no arguments and no stdin, launch TUI mode
   if [[ -z "$query" ]] && [[ -z "$stdin_input" ]]; then
-    zllm_tui
+    zllm_tui "$model"
     return
   fi
-  
+
   # One-shot query mode
   if [[ -z "$query" ]]; then
-    echo "Usage: zllm \"your query here\" or echo \"input\" | zllm \"your query\" or just zllm for interactive mode"
+    echo "Usage: zllm [-m model] \"your query here\" or echo \"input\" | zllm \"your query\" or just zllm for interactive mode"
     return 1
   fi
-  
+
   # Use the existing LLM infrastructure with chat mode
   local result_file="/tmp/zsh-llm-suggestions-result-direct"
   local llm="$SCRIPT_DIR/zsh-llm-suggestions.sh --mode chat"
-  
+
+  # Set model environment variable if specified
+  if [[ -n "$model" ]]; then
+    local provider="${LLM_PROVIDER:-gemini}"
+    local provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+    export ${provider_upper}_MODEL="$model"
+  fi
+
   # Run the query and wait for it to complete
   echo -n "$query" | eval $llm > $result_file
-  
+
   # Output the result
   cat $result_file
-  
+
   # Clean up
   rm -f $result_file
 }
 
 zllm_tui() {
+  local model="$1"  # Optional model parameter
   local conversation_file="/tmp/zsh-llm-conversation-$$"
   local query_file="/tmp/zsh-llm-query-$$"
   local result_file="/tmp/zsh-llm-result-$$"
-  
+
+  # Set model environment variable if specified
+  if [[ -n "$model" ]]; then
+    local provider="${LLM_PROVIDER:-gemini}"
+    local provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+    export ${provider_upper}_MODEL="$model"
+  fi
+
   # Clean exit handling
   cleanup() {
     tput rmcup
@@ -124,14 +157,14 @@ zllm_tui() {
     stty echo
   }
   trap cleanup EXIT INT TERM
-  
+
   tput smcup
 
   # Suppress all job control
   {
     set +m
     setopt NO_NOTIFY 2>/dev/null
-    setopt NO_BG_NICE 2>/dev/null  
+    setopt NO_BG_NICE 2>/dev/null
   } 2>/dev/null
   
   # Initialize conversation
